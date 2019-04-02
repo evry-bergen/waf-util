@@ -1,16 +1,24 @@
 package main
 
 import (
-	"flag"
+	"fmt"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
 
+	"github.com/spf13/viper"
+
+	"github.com/Azure/go-autorest/autorest/azure/auth"
+
+	"github.com/spf13/pflag"
+
 	"github.com/evry-ace/waf-util/pkg/director"
 
 	istio "github.com/evry-ace/waf-util/pkg/clients/istio/clientset/versioned"
 	istioInformers "github.com/evry-ace/waf-util/pkg/clients/istio/informers/externalversions"
+
+	azureNetwork "github.com/Azure/azure-sdk-for-go/services/network/mgmt/2018-12-01/network"
 
 	"go.uber.org/zap"
 	"istio.io/fortio/log"
@@ -37,9 +45,11 @@ func getK8sConfig() (*rest.Config, error) {
 
 func newIstioInformerFactory(kubeconfig *rest.Config) istioInformers.SharedInformerFactory {
 	config, err := istio.NewForConfig(kubeconfig)
+
 	if err != nil {
 		zap.S().Panic("unable to create naiserator clientset")
 	}
+
 	return istioInformers.NewSharedInformerFactory(config, time.Second*30)
 }
 
@@ -61,34 +71,54 @@ func newGenericClientset(kubeconfig *rest.Config) *kubernetes.Clientset {
 	return cs
 }
 
+func newAzureClient() *azureNetwork.ApplicationGatewaysClient {
+	agClient := azureNetwork.NewApplicationGatewaysClient(viper.GetString("azure_subscription_id"))
+
+	// create an authorizer from env vars or Azure Managed Service Idenity
+	authorizer, err := auth.NewAuthorizerFromEnvironment()
+	if err == nil {
+		agClient.Authorizer = authorizer
+	}
+	return &agClient
+}
+
 func main() {
+
+	pflag.String("kubeconfig", "", "ABS path to kubeconfig")
+	pflag.String("master", "", "k8s master url")
+	pflag.String("azure_subscription_id", "", "Subscription to use where the WAF / AG is")
+	pflag.String("azure_waf_rg", "", "The AG / WAF RG to use")
+	pflag.String("azure_waf_name", "", "The AG / WAF instance to use")
+
+	viper.BindPFlags(pflag.CommandLine)
+	viper.AutomaticEnv()
+
 	// logger, _ := zap.NewProduction()
 	logger, _ := zap.NewDevelopment()
 	zap.ReplaceGlobals(logger)
 
-	var master string
-
-	flag.StringVar(&kubeconfig, "kubeconfig", "", "absolute path to the kubeconfig file")
-	flag.StringVar(&master, "master", "", "master url")
-	flag.Parse()
-
 	// creates the connection
-	config, err := clientcmd.BuildConfigFromFlags(master, kubeconfig)
+	kubeConfig := viper.GetString("kubeconfig")
+	master := viper.GetString("master")
+	fmt.Println(kubeConfig, master)
+	config, err := clientcmd.BuildConfigFromFlags(master, kubeConfig)
 	if err != nil {
 		zap.S().Error(err)
 	}
 
 	// creates the clientset
 	clientset := newGenericClientset(config)
-
 	istioSet := newIstioClientSet(config)
+
+	var azureAgClient *azureNetwork.ApplicationGatewaysClient
+	azureAgClient = newAzureClient()
 
 	stopCh := StopCh()
 
 	gatewayInformerFactory := newIstioInformerFactory(config)
 	gatewayInformer := gatewayInformerFactory.Networking().V1alpha3().Gateways()
 
-	director := director.NewDirector(clientset, istioSet, gatewayInformer)
+	director := director.NewDirector(clientset, istioSet, azureAgClient, gatewayInformer)
 
 	gatewayInformerFactory.Start(stopCh)
 	director.Run(stopCh)
@@ -99,6 +129,7 @@ func StopCh() (stopCh <-chan struct{}) {
 	stop := make(chan struct{})
 	c := make(chan os.Signal, 2)
 	signal.Notify(c, []os.Signal{os.Interrupt, syscall.SIGTERM, syscall.SIGINT}...)
+
 	go func() {
 		<-c
 		close(stop)
