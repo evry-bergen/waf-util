@@ -238,10 +238,12 @@ func (d *Director) syncWAFLoop(stop <-chan struct{}) {
 
 		d.syncTargetsToWAF(&waf)
 
+		zap.S().Info("Updating WAF")
 		_, err = d.AzureAGClient.CreateOrUpdate(context.Background(), agRgName, agName, waf)
 		if err != nil {
 			zap.S().Error(err)
 		}
+		zap.S().Info("Successfully updated WAF")
 
 	sleep:
 		time.Sleep(time.Second * 5)
