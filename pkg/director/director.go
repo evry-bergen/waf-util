@@ -219,6 +219,10 @@ func (d *Director) syncWAFLoop(stop <-chan struct{}) {
 	agName := viper.GetString("azure_waf_name")
 	agRgName := viper.GetString("azure_waf_rg")
 
+	var (
+		updateFuture azureNetwork.ApplicationGatewaysCreateOrUpdateFuture
+	)
+
 	for {
 		waf, err := d.AzureAGClient.Get(context.Background(), agRgName, agName)
 
@@ -239,7 +243,14 @@ func (d *Director) syncWAFLoop(stop <-chan struct{}) {
 		d.syncTargetsToWAF(&waf)
 
 		zap.S().Info("Updating WAF")
-		_, err = d.AzureAGClient.CreateOrUpdate(context.Background(), agRgName, agName, waf)
+
+		updateFuture, err = d.AzureAGClient.CreateOrUpdate(context.Background(), agRgName, agName, waf)
+		if err != nil {
+			zap.S().Error(err)
+		}
+
+		err = updateFuture.WaitForCompletionRef(context.Background(), d.AzureAGClient.Client)
+
 		if err != nil {
 			zap.S().Error(err)
 		}
