@@ -4,7 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/x509"
-	"encoding/json"
+	"encoding/base64"
 	"encoding/pem"
 	"fmt"
 	"time"
@@ -45,6 +45,10 @@ type TerminationTarget struct {
 	Target    string
 }
 
+func (t *TerminationTarget) GenerateName() string {
+	return fmt.Sprintf("%s-tls", t.Host)
+}
+
 // Run - run it
 func (d *Director) Run(stop <-chan struct{}) {
 	zap.S().Info("Starting application synchronization")
@@ -63,7 +67,6 @@ func (d *Director) add(gw interface{}) {
 }
 
 func (d *Director) update(old interface{}, new interface{}) {
-	// zap.S().Infof("Update:  gw %s", new)
 	var gw, previous *istioApiv1alpha3.Gateway
 
 	if old != nil {
@@ -76,8 +79,6 @@ func (d *Director) update(old interface{}, new interface{}) {
 
 	gw = new.(*istioApiv1alpha3.Gateway)
 
-	// credName := gw.Spec.Servers[0].TLS.CredentialName
-
 	for _, srv := range gw.Spec.Servers {
 		if srv.TLS != nil {
 			zap.S().Info("Found TLS enabled port")
@@ -88,16 +89,12 @@ func (d *Director) update(old interface{}, new interface{}) {
 				target := TerminationTarget{
 					Host:      host,
 					Secret:    secretName,
-					Target:    "10.201.33.6",
+					Target:    "test-beap",
 					Namespace: gw.Namespace,
 				}
 
-				// if _, ok := d.CurrentTargets[host]; !ok {
 				zap.S().Debugf("Adding for %s for configuration with secret %s", host, secretName)
 				d.CurrentTargets[host] = target
-				// } else {
-				// 	zap.S().Infof("Error host %s exists", host)
-				// }
 			}
 		}
 	}
@@ -107,13 +104,10 @@ func resourceRef(id string) *azureNetwork.SubResource {
 	return &azureNetwork.SubResource{ID: to.StringPtr(id)}
 }
 
-func generateListenerName(target TerminationTarget) string {
-	return fmt.Sprintf("%s-tls", target.Host)
-}
-
 func (d *Director) syncTargetsToWAF(waf *azureNetwork.ApplicationGateway) {
 	newListeners := []azureNetwork.ApplicationGatewayHTTPListener{}
 	sslCertificates := []azureNetwork.ApplicationGatewaySslCertificate{}
+	routingRules := []azureNetwork.ApplicationGatewayRequestRoutingRule{}
 	secretCertMap := map[string]map[string][]byte{}
 
 	listeners := *waf.HTTPListeners
@@ -135,13 +129,12 @@ func (d *Director) syncTargetsToWAF(waf *azureNetwork.ApplicationGateway) {
 
 			listener = &azureNetwork.ApplicationGatewayHTTPListener{}
 
-			listenerName := generateListenerName(target)
+			listenerName := target.GenerateName()
 			listener.Name = &listenerName
 		}
 
 		frontendIPRef := resourceRef(*(*waf.FrontendIPConfigurations)[0].ID)
 
-		// serialiazed, _ := json.Marshal(frontendIPRef)
 		listener.ApplicationGatewayHTTPListenerPropertiesFormat = &azureNetwork.ApplicationGatewayHTTPListenerPropertiesFormat{
 			FrontendIPConfiguration: frontendIPRef,
 			FrontendPort:            resourceRef(*waf.ID + "/frontEndPorts/https"),
@@ -159,14 +152,26 @@ func (d *Director) syncTargetsToWAF(waf *azureNetwork.ApplicationGateway) {
 			continue
 		}
 
+		httpListenerSubResource := azureNetwork.SubResource{ID: to.StringPtr(fmt.Sprintf("%s/httpListeners/%s", *waf.ID, *listener.Name))}
+		routingRule := azureNetwork.ApplicationGatewayRequestRoutingRule{
+			Etag: to.StringPtr("*"),
+			Name: to.StringPtr(target.GenerateName()),
+			ApplicationGatewayRequestRoutingRulePropertiesFormat: &azureNetwork.ApplicationGatewayRequestRoutingRulePropertiesFormat{
+				RuleType:            azureNetwork.Basic,
+				HTTPListener:        &httpListenerSubResource,
+				BackendAddressPool:  resourceRef(fmt.Sprintf("%s/backendAddressPools/%s", *waf.ID, target.Target)),
+				BackendHTTPSettings: resourceRef(fmt.Sprintf("%s/backendHttpSettingsCollection/%s", *waf.ID, "test-be-htst")),
+			},
+		}
+
+		routingRules = append(routingRules, routingRule)
 		newListeners = append(newListeners, *listener)
 		secretCertMap[secret.Namespace+"-"+secretName] = secret.Data
 	}
 
 	for secretName, cert := range secretCertMap {
 		zap.S().Debugf("Processing secret %s", secretName)
-		// keyBlock, err := pem.Decode(cert["tls.key"])
-		// key := x509.ParsePKCS1PrivateKey
+
 		certBlock, _ := pem.Decode(cert["tls.crt"])
 		certX509, err := x509.ParseCertificate(certBlock.Bytes)
 		if err != nil {
@@ -189,11 +194,14 @@ func (d *Director) syncTargetsToWAF(waf *azureNetwork.ApplicationGateway) {
 			zap.S().Error(err)
 		}
 
+		certB64 := base64.StdEncoding.EncodeToString(certPfx)
+
 		agCert := azureNetwork.ApplicationGatewaySslCertificate{
 			Etag: to.StringPtr(""),
 			Name: to.StringPtr(secretName),
 			ApplicationGatewaySslCertificatePropertiesFormat: &azureNetwork.ApplicationGatewaySslCertificatePropertiesFormat{
-				Data: to.StringPtr(string(certPfx)),
+				Data:     to.StringPtr(certB64),
+				Password: to.StringPtr("azure"),
 			},
 		}
 
@@ -202,6 +210,8 @@ func (d *Director) syncTargetsToWAF(waf *azureNetwork.ApplicationGateway) {
 
 	waf.HTTPListeners = &newListeners
 	waf.SslCertificates = &sslCertificates
+	waf.RequestRoutingRules = &routingRules
+
 	zap.S().Debugf("Have %d certificates", len(*waf.SslCertificates))
 }
 
@@ -212,7 +222,6 @@ func (d *Director) syncWAFLoop(stop <-chan struct{}) {
 	for {
 		waf, err := d.AzureAGClient.Get(context.Background(), agRgName, agName)
 
-		var serialized []byte
 		if err != nil {
 			zap.S().Error(err)
 			zap.S().Infof("Error getting WAF %s %s", agRgName, agName)
@@ -229,8 +238,6 @@ func (d *Director) syncWAFLoop(stop <-chan struct{}) {
 
 		d.syncTargetsToWAF(&waf)
 
-		serialized, _ = json.Marshal(waf)
-		fmt.Println(string(serialized))
 		_, err = d.AzureAGClient.CreateOrUpdate(context.Background(), agRgName, agName, waf)
 		if err != nil {
 			zap.S().Error(err)
