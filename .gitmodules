@@ -1,0 +1,3 @@
+[submodule "knative-pkg"]
+	path = knative-pkg
+	url = https://github.com/knative/pkg
