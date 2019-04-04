@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"os"
 	"os/signal"
 	"syscall"
@@ -100,7 +99,7 @@ func main() {
 	// creates the connection
 	kubeConfig := viper.GetString("kubeconfig")
 	master := viper.GetString("master")
-	fmt.Println(kubeConfig, master)
+
 	config, err := clientcmd.BuildConfigFromFlags(master, kubeConfig)
 	if err != nil {
 		zap.S().Error(err)

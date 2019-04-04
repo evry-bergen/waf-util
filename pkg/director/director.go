@@ -178,7 +178,6 @@ func (d *Director) syncTargetsToWAF(waf *azureNetwork.ApplicationGateway) {
 			continue
 		}
 
-		fmt.Println(wrapper)
 		certPfx, err := sslMate.Encode(rand.Reader, wrapper.PrivateKey, wrapper.Certificates[0], wrapper.CACertificates, "azure")
 
 		if err != nil {
