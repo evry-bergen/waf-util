@@ -19,9 +19,9 @@ limitations under the License.
 package fake
 
 import (
-	clientset "github.com/evry-ace/waf-util/pkg/clients/istio/clientset/versioned"
-	networkingv1alpha3 "github.com/evry-ace/waf-util/pkg/clients/istio/clientset/versioned/typed/istio/v1alpha3"
-	fakenetworkingv1alpha3 "github.com/evry-ace/waf-util/pkg/clients/istio/clientset/versioned/typed/istio/v1alpha3/fake"
+	clientset "github.com/evry-bergen/waf-util/pkg/clients/istio/clientset/versioned"
+	networkingv1alpha3 "github.com/evry-bergen/waf-util/pkg/clients/istio/clientset/versioned/typed/istio/v1alpha3"
+	fakenetworkingv1alpha3 "github.com/evry-bergen/waf-util/pkg/clients/istio/clientset/versioned/typed/istio/v1alpha3/fake"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/discovery"

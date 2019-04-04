@@ -22,7 +22,7 @@ SCRIPT_ROOT=$(dirname ${BASH_SOURCE})/..
 CODEGEN_PKG=${CODEGEN_PKG:-$(cd ${SCRIPT_ROOT}; [ -x ./vendor/k8s.io/code-generator/generate-groups.sh ] && ls -d -1 ./vendor/k8s.io/code-generator 2>/dev/null || echo ../code-generator)}
 
 ${CODEGEN_PKG}/generate-groups.sh "deepcopy,client,informer,lister" \
-  github.com/evry-ace/waf-util/pkg/clients/istio github.com/knative/pkg/apis \
+  github.com/evry-bergen/waf-util/pkg/clients/istio github.com/knative/pkg/apis \
   "istio:v1alpha3" \
   --go-header-file ${SCRIPT_ROOT}/hack/boilerplate.go.txt
 

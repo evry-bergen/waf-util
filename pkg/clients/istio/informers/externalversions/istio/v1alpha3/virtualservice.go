@@ -21,9 +21,9 @@ package v1alpha3
 import (
 	time "time"
 
-	versioned "github.com/evry-ace/waf-util/pkg/clients/istio/clientset/versioned"
-	internalinterfaces "github.com/evry-ace/waf-util/pkg/clients/istio/informers/externalversions/internalinterfaces"
-	v1alpha3 "github.com/evry-ace/waf-util/pkg/clients/istio/listers/istio/v1alpha3"
+	versioned "github.com/evry-bergen/waf-util/pkg/clients/istio/clientset/versioned"
+	internalinterfaces "github.com/evry-bergen/waf-util/pkg/clients/istio/informers/externalversions/internalinterfaces"
+	v1alpha3 "github.com/evry-bergen/waf-util/pkg/clients/istio/listers/istio/v1alpha3"
 	istiov1alpha3 "github.com/knative/pkg/apis/istio/v1alpha3"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"

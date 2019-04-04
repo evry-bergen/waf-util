@@ -19,7 +19,7 @@ limitations under the License.
 package v1alpha3
 
 import (
-	"github.com/evry-ace/waf-util/pkg/clients/istio/clientset/versioned/scheme"
+	"github.com/evry-bergen/waf-util/pkg/clients/istio/clientset/versioned/scheme"
 	v1alpha3 "github.com/knative/pkg/apis/istio/v1alpha3"
 	serializer "k8s.io/apimachinery/pkg/runtime/serializer"
 	rest "k8s.io/client-go/rest"

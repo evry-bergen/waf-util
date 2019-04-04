@@ -3,20 +3,21 @@ package director
 import (
 	"context"
 	"crypto/rand"
-	"crypto/x509"
 	"encoding/base64"
-	"encoding/pem"
 	"fmt"
 	"time"
+
+	"github.com/evry-bergen/waf-util/pkg/crypto"
+	"k8s.io/api/core/v1"
 
 	"github.com/Azure/go-autorest/autorest/to"
 
 	"github.com/spf13/viper"
 
-	istio "github.com/evry-ace/waf-util/pkg/clients/istio/clientset/versioned"
+	istio "github.com/evry-bergen/waf-util/pkg/clients/istio/clientset/versioned"
 	istioApiv1alpha3 "github.com/knative/pkg/apis/istio/v1alpha3"
 
-	"github.com/evry-ace/waf-util/pkg/clients/istio/informers/externalversions/istio/v1alpha3"
+	"github.com/evry-bergen/waf-util/pkg/clients/istio/informers/externalversions/istio/v1alpha3"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/cache"
 
@@ -108,7 +109,7 @@ func (d *Director) syncTargetsToWAF(waf *azureNetwork.ApplicationGateway) {
 	newListeners := []azureNetwork.ApplicationGatewayHTTPListener{}
 	sslCertificates := []azureNetwork.ApplicationGatewaySslCertificate{}
 	routingRules := []azureNetwork.ApplicationGatewayRequestRoutingRule{}
-	secretCertMap := map[string]map[string][]byte{}
+	secretCertMap := map[string]*v1.Secret{}
 
 	listeners := *waf.HTTPListeners
 	for host, target := range d.CurrentTargets {
@@ -166,32 +167,24 @@ func (d *Director) syncTargetsToWAF(waf *azureNetwork.ApplicationGateway) {
 
 		routingRules = append(routingRules, routingRule)
 		newListeners = append(newListeners, *listener)
-		secretCertMap[secret.Namespace+"-"+secretName] = secret.Data
+		secretCertMap[secret.Namespace+"-"+secretName] = secret
 	}
 
-	for secretName, cert := range secretCertMap {
-		zap.S().Debugf("Processing secret %s", secretName)
+	for secretName, secret := range secretCertMap {
+		wrapper, err := crypto.ParseSecretToCertContainer(secret)
 
-		certBlock, _ := pem.Decode(cert["tls.crt"])
-		certX509, err := x509.ParseCertificate(certBlock.Bytes)
 		if err != nil {
-			zap.S().Errorf("Error decoding secret x509 %s", secretName)
+			zap.S().Error(err)
 			continue
 		}
 
-		key, _ := pem.Decode(cert["tls.key"])
-		keyX509, err := x509.ParsePKCS1PrivateKey(key.Bytes)
-		if err != nil {
-			zap.S().Errorf("Error decoding secret key %s", secretName)
-			continue
-		}
+		fmt.Println(wrapper)
+		certPfx, err := sslMate.Encode(rand.Reader, wrapper.PrivateKey, wrapper.Certificates[0], wrapper.CACertificates, "azure")
 
-		caCerts := make([]*x509.Certificate, 0)
-
-		certPfx, err := sslMate.Encode(rand.Reader, keyX509, certX509, caCerts, "azure")
 		if err != nil {
 			zap.S().Errorf("Error constructing PFX for %s", secretName)
 			zap.S().Error(err)
+			continue
 		}
 
 		certB64 := base64.StdEncoding.EncodeToString(certPfx)
@@ -263,6 +256,7 @@ func (d *Director) syncWAFLoop(stop <-chan struct{}) {
 
 // NewDirector - Creates a new instance of the director
 func NewDirector(k8sClient *kubernetes.Clientset, istioClient *istio.Clientset, agClient *azureNetwork.ApplicationGatewaysClient, gwInformer v1alpha3.GatewayInformer) *Director {
+
 	director := &Director{
 		AzureAGClient:         agClient,
 		ClientSet:             k8sClient,

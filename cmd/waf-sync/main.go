@@ -13,10 +13,10 @@ import (
 
 	"github.com/spf13/pflag"
 
-	"github.com/evry-ace/waf-util/pkg/director"
+	"github.com/evry-bergen/waf-util/pkg/director"
 
-	istio "github.com/evry-ace/waf-util/pkg/clients/istio/clientset/versioned"
-	istioInformers "github.com/evry-ace/waf-util/pkg/clients/istio/informers/externalversions"
+	istio "github.com/evry-bergen/waf-util/pkg/clients/istio/clientset/versioned"
+	istioInformers "github.com/evry-bergen/waf-util/pkg/clients/istio/informers/externalversions"
 
 	azureNetwork "github.com/Azure/azure-sdk-for-go/services/network/mgmt/2018-12-01/network"
 

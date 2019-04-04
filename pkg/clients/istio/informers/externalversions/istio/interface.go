@@ -19,8 +19,8 @@ limitations under the License.
 package networking
 
 import (
-	internalinterfaces "github.com/evry-ace/waf-util/pkg/clients/istio/informers/externalversions/internalinterfaces"
-	v1alpha3 "github.com/evry-ace/waf-util/pkg/clients/istio/informers/externalversions/istio/v1alpha3"
+	internalinterfaces "github.com/evry-bergen/waf-util/pkg/clients/istio/informers/externalversions/internalinterfaces"
+	v1alpha3 "github.com/evry-bergen/waf-util/pkg/clients/istio/informers/externalversions/istio/v1alpha3"
 )
 
 // Interface provides access to each of this group's versions.

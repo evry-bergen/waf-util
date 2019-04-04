@@ -19,7 +19,7 @@ limitations under the License.
 package v1alpha3
 
 import (
-	internalinterfaces "github.com/evry-ace/waf-util/pkg/clients/istio/informers/externalversions/internalinterfaces"
+	internalinterfaces "github.com/evry-bergen/waf-util/pkg/clients/istio/informers/externalversions/internalinterfaces"
 )
 
 // Interface provides access to all the informers in this group version.

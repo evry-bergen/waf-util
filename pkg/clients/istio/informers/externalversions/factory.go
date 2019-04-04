@@ -23,9 +23,9 @@ import (
 	sync "sync"
 	time "time"
 
-	versioned "github.com/evry-ace/waf-util/pkg/clients/istio/clientset/versioned"
-	internalinterfaces "github.com/evry-ace/waf-util/pkg/clients/istio/informers/externalversions/internalinterfaces"
-	istio "github.com/evry-ace/waf-util/pkg/clients/istio/informers/externalversions/istio"
+	versioned "github.com/evry-bergen/waf-util/pkg/clients/istio/clientset/versioned"
+	internalinterfaces "github.com/evry-bergen/waf-util/pkg/clients/istio/informers/externalversions/internalinterfaces"
+	istio "github.com/evry-bergen/waf-util/pkg/clients/istio/informers/externalversions/istio"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	schema "k8s.io/apimachinery/pkg/runtime/schema"
