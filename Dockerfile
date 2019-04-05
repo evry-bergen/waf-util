@@ -3,4 +3,4 @@ FROM alpine
 WORKDIR /app
 COPY main .
 
-CMD ["/app/main"]
+CMD ["./main"]
