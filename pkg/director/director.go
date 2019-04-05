@@ -90,7 +90,7 @@ func (d *Director) update(old interface{}, new interface{}) {
 				target := TerminationTarget{
 					Host:      host,
 					Secret:    secretName,
-					Target:    "test-beap",
+					Target:    viper.GetString("azure_waf_backend_pool"),
 					Namespace: gw.Namespace,
 				}
 
@@ -138,7 +138,7 @@ func (d *Director) syncTargetsToWAF(waf *azureNetwork.ApplicationGateway) {
 
 		listener.ApplicationGatewayHTTPListenerPropertiesFormat = &azureNetwork.ApplicationGatewayHTTPListenerPropertiesFormat{
 			FrontendIPConfiguration: frontendIPRef,
-			FrontendPort:            resourceRef(*waf.ID + "/frontEndPorts/https"),
+			FrontendPort:            resourceRef(fmt.Sprintf("%s/frontEndPorts/%s", *waf.ID, viper.GetString("azure_waf_frontend_port"))),
 			HostName:                to.StringPtr(host),
 			Protocol:                azureNetwork.HTTPS,
 			SslCertificate:          resourceRef(*waf.ID + fmt.Sprintf("/sslCertificates/%s", target.Namespace+"-"+target.Secret)),
@@ -161,7 +161,7 @@ func (d *Director) syncTargetsToWAF(waf *azureNetwork.ApplicationGateway) {
 				RuleType:            azureNetwork.Basic,
 				HTTPListener:        &httpListenerSubResource,
 				BackendAddressPool:  resourceRef(fmt.Sprintf("%s/backendAddressPools/%s", *waf.ID, target.Target)),
-				BackendHTTPSettings: resourceRef(fmt.Sprintf("%s/backendHttpSettingsCollection/%s", *waf.ID, "test-be-htst")),
+				BackendHTTPSettings: resourceRef(fmt.Sprintf("%s/backendHttpSettingsCollection/%s", *waf.ID, viper.GetString("azure_waf_backend_http_settings"))),
 			},
 		}
 

@@ -82,12 +82,15 @@ func newAzureClient() *azureNetwork.ApplicationGatewaysClient {
 }
 
 func main() {
-
 	pflag.String("kubeconfig", "", "ABS path to kubeconfig")
 	pflag.String("master", "", "k8s master url")
 	pflag.String("azure_subscription_id", "", "Subscription to use where the WAF / AG is")
+
 	pflag.String("azure_waf_rg", "", "The AG / WAF RG to use")
 	pflag.String("azure_waf_name", "", "The AG / WAF instance to use")
+	pflag.String("azure_waf_backend_pool", "", "The AG / WAF backend pool")
+	pflag.String("azure_waf_frontend_port", "https", "The AG / WAF frontend port name")
+	pflag.String("azure_waf_backend_http_settings", "", "The AG / WAF backend http settings name")
 
 	viper.BindPFlags(pflag.CommandLine)
 	viper.AutomaticEnv()
