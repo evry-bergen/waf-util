@@ -92,6 +92,8 @@ func main() {
 	pflag.String("azure_waf_frontend_port", "https", "The AG / WAF frontend port name")
 	pflag.String("azure_waf_backend_http_settings", "", "The AG / WAF backend http settings name")
 
+	pflag.String("azure_waf_listener_prefix", "wd", "Prefix all WAF Director listeners with this")
+
 	viper.BindPFlags(pflag.CommandLine)
 	viper.AutomaticEnv()
 

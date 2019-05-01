@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/evry-bergen/waf-util/pkg/crypto"
@@ -46,8 +47,16 @@ type TerminationTarget struct {
 	Target    string
 }
 
-func (t *TerminationTarget) GenerateName() string {
+func (t *TerminationTarget) generateName() string {
 	return fmt.Sprintf("%s-tls", t.Host)
+}
+
+func (t TerminationTarget) generateNameWithPrefix(prefix string) string {
+	return fmt.Sprintf("%s-%s", prefix, t.generateName())
+}
+
+func (t TerminationTarget) generateSecretName(prefix string) string {
+	return fmt.Sprintf("%s-%s-%s", prefix, t.Namespace, t.Secret)
 }
 
 // Run - run it
@@ -106,33 +115,60 @@ func resourceRef(id string) *azureNetwork.SubResource {
 }
 
 func (d *Director) syncTargetsToWAF(waf *azureNetwork.ApplicationGateway) {
-	newListeners := []azureNetwork.ApplicationGatewayHTTPListener{}
-	sslCertificates := []azureNetwork.ApplicationGatewaySslCertificate{}
-	routingRules := []azureNetwork.ApplicationGatewayRequestRoutingRule{}
-	secretCertMap := map[string]*v1.Secret{}
+	wdPrefix := viper.GetString("azure_waf_listener_prefix")
 
-	listeners := *waf.HTTPListeners
+	sslCertificates := []azureNetwork.ApplicationGatewaySslCertificate{}
+	listeners := []azureNetwork.ApplicationGatewayHTTPListener{}
+	routingRules := []azureNetwork.ApplicationGatewayRequestRoutingRule{}
+
+	secretCertMap := map[string]*v1.Secret{}
+	listenersByName := map[string]azureNetwork.ApplicationGatewayHTTPListener{}
+
+	/*
+	 Loop through the settings we manage and keep the already existing
+	 resources not prefixed by us.
+	*/
+	for _, sslCert := range *waf.SslCertificates {
+		if strings.HasPrefix(*sslCert.Name, wdPrefix) {
+			zap.S().Debugf("Skipping %s", *sslCert.Name)
+			continue
+		}
+
+		sslCertificates = append(sslCertificates, sslCert)
+	}
+
+	for _, l := range *waf.HTTPListeners {
+		if strings.HasPrefix(*l.Name, wdPrefix) {
+			zap.S().Debugf("Skipping %s", *l.Name)
+			continue
+		}
+
+		listeners = append(listeners, l)
+		listenersByName[*l.Name] = l
+	}
+
+	for _, rr := range *waf.RequestRoutingRules {
+		if strings.HasPrefix(*rr.Name, wdPrefix) {
+			zap.S().Debugf("Skipping %s", *rr.Name)
+			continue
+		}
+
+		routingRules = append(routingRules, rr)
+	}
+
+	/*
+		We are looking at the current Targets aka VirtualGateways and their secrets, from this
+		we get the information needed to create AG Listeners and their Certifiates based on the k8s
+		secrets.
+	*/
 	for host, target := range d.CurrentTargets {
 		zap.S().Debugf("Syncing %s > %s", host, target.Target)
 
-		var listener *azureNetwork.ApplicationGatewayHTTPListener
-		for _, i := range listeners {
-			if i.HostName != nil && *i.HostName == target.Host {
-				zap.S().Debugf("Found listener")
+		var listener azureNetwork.ApplicationGatewayHTTPListener
 
-				listener = &i
-				break
-			}
-		}
-
-		if listener == nil {
-			zap.S().Infof("Creating listener for %s", target.Host)
-
-			listener = &azureNetwork.ApplicationGatewayHTTPListener{}
-
-			listenerName := target.GenerateName()
-			listener.Name = &listenerName
-		}
+		listenerName := target.generateNameWithPrefix(wdPrefix)
+		listener = azureNetwork.ApplicationGatewayHTTPListener{}
+		listener.Name = &listenerName
 
 		frontendIPRef := resourceRef(*(*waf.FrontendIPConfigurations)[0].ID)
 
@@ -141,11 +177,10 @@ func (d *Director) syncTargetsToWAF(waf *azureNetwork.ApplicationGateway) {
 			FrontendPort:            resourceRef(fmt.Sprintf("%s/frontEndPorts/%s", *waf.ID, viper.GetString("azure_waf_frontend_port"))),
 			HostName:                to.StringPtr(host),
 			Protocol:                azureNetwork.HTTPS,
-			SslCertificate:          resourceRef(*waf.ID + fmt.Sprintf("/sslCertificates/%s", target.Namespace+"-"+target.Secret)),
+			SslCertificate:          resourceRef(fmt.Sprintf("%s/sslCertificates/%s", *waf.ID, target.generateSecretName(wdPrefix))),
 		}
 
-		secretName := target.Secret
-		secret, err := d.ClientSet.CoreV1().Secrets(target.Namespace).Get(secretName, metav1.GetOptions{})
+		secret, err := d.ClientSet.CoreV1().Secrets(target.Namespace).Get(target.Secret, metav1.GetOptions{})
 
 		if err != nil {
 			zap.S().Infof("Error getting secret for listener %s, not added to listener list", host)
@@ -153,10 +188,14 @@ func (d *Director) syncTargetsToWAF(waf *azureNetwork.ApplicationGateway) {
 			continue
 		}
 
+		/*
+			Tie the listener together to a routing rule which ties together a hostname based listener
+			to a backend
+		*/
 		httpListenerSubResource := azureNetwork.SubResource{ID: to.StringPtr(fmt.Sprintf("%s/httpListeners/%s", *waf.ID, *listener.Name))}
 		routingRule := azureNetwork.ApplicationGatewayRequestRoutingRule{
 			Etag: to.StringPtr("*"),
-			Name: to.StringPtr(target.GenerateName()),
+			Name: to.StringPtr(target.generateNameWithPrefix(wdPrefix)),
 			ApplicationGatewayRequestRoutingRulePropertiesFormat: &azureNetwork.ApplicationGatewayRequestRoutingRulePropertiesFormat{
 				RuleType:            azureNetwork.Basic,
 				HTTPListener:        &httpListenerSubResource,
@@ -166,12 +205,15 @@ func (d *Director) syncTargetsToWAF(waf *azureNetwork.ApplicationGateway) {
 		}
 
 		routingRules = append(routingRules, routingRule)
-		newListeners = append(newListeners, *listener)
-		secretCertMap[secret.Namespace+"-"+secretName] = secret
+		listeners = append(listeners, listener)
+
+		// Prefix all secrets with wdPrefix so we can track which ones we own
+		secretCertMap[target.generateSecretName(wdPrefix)] = secret
 	}
 
 	for secretName, secret := range secretCertMap {
 		wrapper, err := crypto.ParseSecretToCertContainer(secret)
+		zap.S().Debugf("Converting certificate %s", secretName)
 
 		if err != nil {
 			zap.S().Error(err)
@@ -200,7 +242,7 @@ func (d *Director) syncTargetsToWAF(waf *azureNetwork.ApplicationGateway) {
 		sslCertificates = append(sslCertificates, agCert)
 	}
 
-	waf.HTTPListeners = &newListeners
+	waf.HTTPListeners = &listeners
 	waf.SslCertificates = &sslCertificates
 	waf.RequestRoutingRules = &routingRules
 
