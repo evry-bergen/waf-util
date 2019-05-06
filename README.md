@@ -12,3 +12,6 @@ kubectl create secret generic -n kube-system ace-waf-director \
 ```
 
 Use the helm chart to install it into k8s.
+
+# Inspiration for http redirect
+https://github.com/Azure/application-gateway-kubernetes-ingress/pull/132
