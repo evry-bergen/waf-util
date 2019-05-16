@@ -24,7 +24,6 @@ ace(opts) {
   stage('Setup') {
     docker.image("golang:${goVer}").inside(args.join(' ')) {
       sh """
-        export GOCACHE=.GOCACHE
         make setup
       """
     }
@@ -42,7 +41,6 @@ ace(opts) {
   stage('Build') {
     docker.image("golang:${goVer}").inside(args.join(' ')) {
       sh """
-        export GOCACHE=.GOCACHE
         make
       """
     }
