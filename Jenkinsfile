@@ -22,6 +22,9 @@ ace(opts) {
   ]
 
   stage('Setup') {
+    sh """
+    git submodule update --init
+    """
     docker.image("golang:${goVer}").inside(args.join(' ')) {
       sh """
         make setup
