@@ -1,6 +1,7 @@
 package main
 
 import (
+	"log"
 	"os"
 	"os/signal"
 	"syscall"
@@ -12,15 +13,14 @@ import (
 
 	"github.com/spf13/pflag"
 
-	"github.com/evry-bergen/waf-util/pkg/director"
+	"github.com/evry-bergen/waf-syncer/pkg/director"
 
-	istio "github.com/evry-bergen/waf-util/pkg/clients/istio/clientset/versioned"
-	istioInformers "github.com/evry-bergen/waf-util/pkg/clients/istio/informers/externalversions"
+	istio "github.com/evry-bergen/waf-syncer/pkg/clients/istio/clientset/versioned"
+	istioInformers "github.com/evry-bergen/waf-syncer/pkg/clients/istio/informers/externalversions"
 
 	azureNetwork "github.com/Azure/azure-sdk-for-go/services/network/mgmt/2018-12-01/network"
 
 	"go.uber.org/zap"
-	"istio.io/fortio/log"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
@@ -34,10 +34,10 @@ type Syncer struct {
 
 func getK8sConfig() (*rest.Config, error) {
 	if kubeconfig == "" {
-		log.Infof("using in-cluster configuration")
+		zap.S().Info("using in-cluster configuration")
 		return rest.InClusterConfig()
 	} else {
-		log.Infof("using configuration from '%s'", kubeconfig)
+		zap.S().Infof("using configuration from '%s'", kubeconfig)
 		return clientcmd.BuildConfigFromFlags("", kubeconfig)
 	}
 }
