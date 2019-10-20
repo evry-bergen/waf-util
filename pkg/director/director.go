@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/evry-bergen/waf-util/pkg/crypto"
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 
 	"github.com/Azure/go-autorest/autorest/to"
 
@@ -193,8 +193,9 @@ func (d *Director) syncTargetsToWAF(waf *azureNetwork.ApplicationGateway) {
 	}
 
 	for secretName, secret := range secretCertMap {
-		wrapper, err := crypto.ParseSecretToCertContainer(secret)
 		zap.S().Debugf("Converting certificate %s", secretName)
+
+		wrapper, err := crypto.ParseSecretToCertContainer(secret)
 
 		if err != nil {
 			zap.S().Error(err)
