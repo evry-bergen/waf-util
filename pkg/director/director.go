@@ -8,17 +8,17 @@ import (
 	"strings"
 	"time"
 
-	"github.com/evry-bergen/waf-util/pkg/crypto"
+	"github.com/evry-bergen/waf-syncer/pkg/crypto"
 	v1 "k8s.io/api/core/v1"
 
 	"github.com/Azure/go-autorest/autorest/to"
 
 	"github.com/spf13/viper"
 
-	istio "github.com/evry-bergen/waf-util/pkg/clients/istio/clientset/versioned"
+	istio "github.com/evry-bergen/waf-syncer/pkg/clients/istio/clientset/versioned"
 	istioApiv1alpha3 "github.com/knative/pkg/apis/istio/v1alpha3"
 
-	"github.com/evry-bergen/waf-util/pkg/clients/istio/informers/externalversions/istio/v1alpha3"
+	"github.com/evry-bergen/waf-syncer/pkg/clients/istio/informers/externalversions/istio/v1alpha3"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/cache"
 

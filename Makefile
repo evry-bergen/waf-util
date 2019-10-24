@@ -1,4 +1,4 @@
-IMPORT_PATH := github.com/evry-bergen/waf-util
+IMPORT_PATH := github.com/evry-bergen/waf-syncer
 
 # V := 1 # When V is set, print commands and build progress.
 
@@ -10,7 +10,7 @@ all: build
 
 .PHONY: build
 build:
-	$Q CGO_ENABLED=0 GOOS=linux go build -a --installsuffix dist -o main $(if $V,-v) $(VERSION_FLAGS) $(IMPORT_PATH)/cmd/waf-sync
+	$Q CGO_ENABLED=0 GOOS=linux go build -a --installsuffix dist -o main $(if $V,-v) $(VERSION_FLAGS) $(IMPORT_PATH)/cmd/waf-syncer
 
 ### Code not in the repository root? Another binary? Add to the path like this.
 # .PHONY: otherbin

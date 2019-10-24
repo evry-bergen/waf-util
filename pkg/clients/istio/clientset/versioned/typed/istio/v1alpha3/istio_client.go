@@ -19,9 +19,8 @@ limitations under the License.
 package v1alpha3
 
 import (
-	"github.com/evry-bergen/waf-util/pkg/clients/istio/clientset/versioned/scheme"
+	"github.com/evry-bergen/waf-syncer/pkg/clients/istio/clientset/versioned/scheme"
 	v1alpha3 "github.com/knative/pkg/apis/istio/v1alpha3"
-	serializer "k8s.io/apimachinery/pkg/runtime/serializer"
 	rest "k8s.io/client-go/rest"
 )
 
@@ -81,7 +80,7 @@ func setConfigDefaults(config *rest.Config) error {
 	gv := v1alpha3.SchemeGroupVersion
 	config.GroupVersion = &gv
 	config.APIPath = "/apis"
-	config.NegotiatedSerializer = serializer.DirectCodecFactory{CodecFactory: scheme.Codecs}
+	config.NegotiatedSerializer = scheme.Codecs.WithoutConversion()
 
 	if config.UserAgent == "" {
 		config.UserAgent = rest.DefaultKubernetesUserAgent()

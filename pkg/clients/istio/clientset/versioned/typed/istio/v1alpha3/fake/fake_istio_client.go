@@ -19,7 +19,7 @@ limitations under the License.
 package fake
 
 import (
-	v1alpha3 "github.com/evry-bergen/waf-util/pkg/clients/istio/clientset/versioned/typed/istio/v1alpha3"
+	v1alpha3 "github.com/evry-bergen/waf-syncer/pkg/clients/istio/clientset/versioned/typed/istio/v1alpha3"
 	rest "k8s.io/client-go/rest"
 	testing "k8s.io/client-go/testing"
 )

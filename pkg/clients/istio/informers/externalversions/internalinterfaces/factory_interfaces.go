@@ -21,7 +21,7 @@ package internalinterfaces
 import (
 	time "time"
 
-	versioned "github.com/evry-bergen/waf-util/pkg/clients/istio/clientset/versioned"
+	versioned "github.com/evry-bergen/waf-syncer/pkg/clients/istio/clientset/versioned"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	cache "k8s.io/client-go/tools/cache"

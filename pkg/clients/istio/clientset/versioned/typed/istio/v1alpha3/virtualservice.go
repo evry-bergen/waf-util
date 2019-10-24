@@ -21,7 +21,7 @@ package v1alpha3
 import (
 	"time"
 
-	scheme "github.com/evry-bergen/waf-util/pkg/clients/istio/clientset/versioned/scheme"
+	scheme "github.com/evry-bergen/waf-syncer/pkg/clients/istio/clientset/versioned/scheme"
 	v1alpha3 "github.com/knative/pkg/apis/istio/v1alpha3"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	types "k8s.io/apimachinery/pkg/types"
