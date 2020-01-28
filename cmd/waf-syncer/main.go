@@ -13,6 +13,7 @@ import (
 
 	"github.com/spf13/pflag"
 
+	"github.com/evry-bergen/waf-syncer/pkg/config"
 	"github.com/evry-bergen/waf-syncer/pkg/director"
 
 	istio "github.com/evry-bergen/waf-syncer/pkg/clients/istio/clientset/versioned"
@@ -48,7 +49,6 @@ func newIstioInformerFactory(kubeconfig *rest.Config) istioInformers.SharedInfor
 	if err != nil {
 		zap.S().Panic("unable to create naiserator clientset")
 	}
-
 	return istioInformers.NewSharedInformerFactory(config, time.Second*30)
 }
 
@@ -57,7 +57,6 @@ func newIstioClientSet(kubeconfig *rest.Config) *istio.Clientset {
 	if err != nil {
 		log.Fatalf("unable to create new clientset")
 	}
-
 	return clientSet
 }
 
@@ -66,7 +65,6 @@ func newGenericClientset(kubeconfig *rest.Config) *kubernetes.Clientset {
 	if err != nil {
 		panic(err.Error())
 	}
-
 	return cs
 }
 
@@ -82,17 +80,7 @@ func newAzureClient() *azureNetwork.ApplicationGatewaysClient {
 }
 
 func main() {
-	pflag.String("kubeconfig", "", "ABS path to kubeconfig")
-	pflag.String("master", "", "k8s master url")
-	pflag.String("azure_subscription_id", "", "Subscription to use where the WAF / AG is")
-
-	pflag.String("azure_waf_rg", "", "The AG / WAF RG to use")
-	pflag.String("azure_waf_name", "", "The AG / WAF instance to use")
-	pflag.String("azure_waf_backend_pool", "", "The AG / WAF backend pool")
-	pflag.String("azure_waf_frontend_port", "https", "The AG / WAF frontend port name")
-	pflag.String("azure_waf_backend_http_settings", "", "The AG / WAF backend http settings name")
-
-	pflag.String("azure_waf_listener_prefix", "wd", "Prefix all WAF Director listeners with this")
+	config.Pflag()
 
 	viper.BindPFlags(pflag.CommandLine)
 	viper.AutomaticEnv()
@@ -102,8 +90,8 @@ func main() {
 	zap.ReplaceGlobals(logger)
 
 	// creates the connection
-	kubeConfig := viper.GetString("kubeconfig")
-	master := viper.GetString("master")
+	kubeConfig := viper.GetString(config.KubeConfig)
+	master := viper.GetString(config.Ks8MasterUrl)
 
 	config, err := clientcmd.BuildConfigFromFlags(master, kubeConfig)
 	if err != nil {
