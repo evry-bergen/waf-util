@@ -15,8 +15,6 @@ import (
 
 	"github.com/Azure/go-autorest/autorest/to"
 
-	"github.com/spf13/viper"
-
 	istioApiv1alpha3 "github.com/knative/pkg/apis/istio/v1alpha3"
 
 	istio "github.com/evry-bergen/waf-syncer/pkg/clients/istio/clientset/versioned"
@@ -55,6 +53,10 @@ func (d *Director) Run(stop <-chan struct{}) {
 	}
 
 	go d.syncWAFLoop(stop)
+}
+
+func (d *Director) syncRetryDelay() {
+	time.Sleep(time.Second * 5)
 }
 
 func (d *Director) add(gw interface{}) {
@@ -189,7 +191,7 @@ func (d *Director) targetRoutingRules(waf *azureNetwork.ApplicationGateway, list
 			RuleType:            azureNetwork.Basic,
 			HTTPListener:        &httpListenerSubResource,
 			BackendAddressPool:  resourceRef(fmt.Sprintf("%s/backendAddressPools/%s", *waf.ID, target.Target)),
-			BackendHTTPSettings: resourceRef(fmt.Sprintf("%s/backendHttpSettingsCollection/%s", *waf.ID, viper.GetString("azure_waf_backend_http_settings"))),
+			BackendHTTPSettings: resourceRef(fmt.Sprintf("%s/backendHttpSettingsCollection/%s", *waf.ID, d.AzureWafConfig.BackendHttpSettings)),
 		},
 	}
 	return routingRule
@@ -203,7 +205,7 @@ func (d *Director) targetListener(target TerminationTarget, wdPrefix string, waf
 	frontendIPRef := resourceRef(*(*waf.FrontendIPConfigurations)[0].ID)
 	listener.ApplicationGatewayHTTPListenerPropertiesFormat = &azureNetwork.ApplicationGatewayHTTPListenerPropertiesFormat{
 		FrontendIPConfiguration: frontendIPRef,
-		FrontendPort:            resourceRef(fmt.Sprintf("%s/frontEndPorts/%s", *waf.ID, viper.GetString("azure_waf_frontend_port"))),
+		FrontendPort:            resourceRef(fmt.Sprintf("%s/frontEndPorts/%s", *waf.ID, d.AzureWafConfig.FrontendPort)),
 		HostName:                to.StringPtr(host),
 		Protocol:                azureNetwork.HTTPS,
 		SslCertificate:          resourceRef(fmt.Sprintf("%s/sslCertificates/%s", *waf.ID, target.generateSecretName(wdPrefix))),
@@ -214,7 +216,7 @@ func (d *Director) targetListener(target TerminationTarget, wdPrefix string, waf
 func (d *Director) rulesToSync(waf *azureNetwork.ApplicationGateway) []azureNetwork.ApplicationGatewayRequestRoutingRule {
 	routingRules := []azureNetwork.ApplicationGatewayRequestRoutingRule{}
 	for _, rr := range *waf.RequestRoutingRules {
-		if d.HasNotPrefix(*rr.Name) {
+		if d.hasNotPrefix(*rr.Name) {
 			routingRules = append(routingRules, rr)
 		} else {
 			zap.S().Debugf("Skipping %s", *rr.Name)
@@ -226,7 +228,7 @@ func (d *Director) rulesToSync(waf *azureNetwork.ApplicationGateway) []azureNetw
 func (d *Director) listenersToSync(waf *azureNetwork.ApplicationGateway, listenersByName map[string]azureNetwork.ApplicationGatewayHTTPListener) []azureNetwork.ApplicationGatewayHTTPListener {
 	listeners := []azureNetwork.ApplicationGatewayHTTPListener{}
 	for _, l := range *waf.HTTPListeners {
-		if d.HasNotPrefix(*l.Name) {
+		if d.hasNotPrefix(*l.Name) {
 			listeners = append(listeners, l)
 			listenersByName[*l.Name] = l
 		} else {
@@ -239,24 +241,23 @@ func (d *Director) listenersToSync(waf *azureNetwork.ApplicationGateway, listene
 func (d *Director) certificatesToSync(waf *azureNetwork.ApplicationGateway) []azureNetwork.ApplicationGatewaySslCertificate {
 	sslCertificates := []azureNetwork.ApplicationGatewaySslCertificate{}
 	for _, sslCert := range *waf.SslCertificates {
-		if d.HasNotPrefix(*sslCert.Name) {
+		if d.hasNotPrefix(*sslCert.Name) {
 			sslCertificates = append(sslCertificates, sslCert)
 		} else {
 			zap.S().Debugf("Skipping %s", *sslCert.Name)
-
 		}
 	}
 	return sslCertificates
 }
 
-func (d *Director) HasNotPrefix(name string) bool {
+func (d *Director) hasNotPrefix(name string) bool {
 	wdPrefix := d.AzureWafConfig.ListenerPrefix
 	return !strings.HasPrefix(name, wdPrefix)
 }
 
 func (d *Director) syncWAFLoop(stop <-chan struct{}) {
-	agName := viper.GetString(config.AzureWafName)
-	agRgName := viper.GetString(config.AzureWafRg)
+	agName := d.AzureWafConfig.Name
+	agRgName := d.AzureWafConfig.ResourceGroup
 
 	var (
 		updateFuture azureNetwork.ApplicationGatewaysCreateOrUpdateFuture
@@ -267,13 +268,14 @@ func (d *Director) syncWAFLoop(stop <-chan struct{}) {
 		if err != nil {
 			zap.S().Error(err)
 			zap.S().Infof("Error getting WAF %s %s", agRgName, agName)
-			goto sleep
+			d.syncRetryDelay()
+			continue
 		}
 
-		// var future azureNetwork.ApplicationGatewaysCreateOrUpdateFuture
 		if *waf.ProvisioningState == "Updating" {
 			zap.S().Debugf("WAF is updating, sleeping.")
-			goto sleep
+			d.syncRetryDelay()
+			continue
 		}
 
 		d.syncTargetsToWAF(&waf)
@@ -289,9 +291,6 @@ func (d *Director) syncWAFLoop(stop <-chan struct{}) {
 			zap.S().Error(err)
 		}
 		zap.S().Info("Successfully updated WAF")
-
-	sleep:
-		time.Sleep(time.Second * 5)
 	}
 }
 

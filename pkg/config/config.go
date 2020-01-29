@@ -35,11 +35,11 @@ type Ks8Config struct {
 func NewAzureConfig() *AzureWafConfig {
 	a := AzureWafConfig{
 		ListenerPrefix:      viper.GetString(AzureWafListenerPrefix),
-		BackendHttpSettings: "",
-		FrontendPort:        "",
+		BackendHttpSettings: viper.GetString(azureWafBackendHttpSettings),
+		FrontendPort:        viper.GetString(azureWafFrontendPort),
 		BackendPool:         viper.GetString(AzureWafBackendPool),
-		Name:                "",
-		ResourceGroup:       "",
+		Name:                viper.GetString(AzureWafName),
+		ResourceGroup:       viper.GetString(AzureWafRg),
 		SubscriptionID:      "",
 	}
 	return &a
