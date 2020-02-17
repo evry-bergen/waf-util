@@ -104,7 +104,6 @@ func resourceRef(id string) *azureNetwork.SubResource {
 
 func (d *Director) syncTargetsToWAF(waf *azureNetwork.ApplicationGateway) {
 	wdPrefix := d.AzureWafConfig.ListenerPrefix
-	secretCertMap := map[string]*v1.Secret{}
 	listenersByName := map[string]azureNetwork.ApplicationGatewayHTTPListener{}
 	/*
 	 Loop through the settings we manage and keep the already existing
@@ -128,56 +127,62 @@ func (d *Director) syncTargetsToWAF(waf *azureNetwork.ApplicationGateway) {
 		*/
 		routingRule := d.targetRoutingRules(waf, listener, listenerName, target)
 
-		routingRules = append(routingRules, routingRule)
-		listeners = append(listeners, listener)
-
 		// Prefix all secrets with wdPrefix so we can track which ones we own
-		secret, err := d.secret(target)
+		secret, err := d.getSecretForTarget(target)
 		if err != nil {
 			zap.S().Infof("Error getting secret for listener %s, not added to listener list", host)
 			zap.S().Error(err)
 			continue
 		}
-		secretCertMap[target.generateSecretName(wdPrefix)] = secret
-	}
 
-	for secretName, secret := range secretCertMap {
-		zap.S().Debugf("Converting certificate %s", secretName)
-
-		wrapper, err := crypto.ParseSecretToCertContainer(secret)
-		if err != nil {
-			zap.S().Error(err)
-			continue
-		}
-
-		certPfx, err := sslMate.Encode(rand.Reader, wrapper.PrivateKey, wrapper.Certificates[0], wrapper.CACertificates, "azure")
-		if err != nil {
-			zap.S().Errorf("Error constructing PFX for %s", secretName)
-			zap.S().Error(err)
-			continue
-		}
-
-		certB64 := base64.StdEncoding.EncodeToString(certPfx)
-		agCert := azureNetwork.ApplicationGatewaySslCertificate{
-			Etag: to.StringPtr(""),
-			Name: to.StringPtr(secretName),
-			ApplicationGatewaySslCertificatePropertiesFormat: &azureNetwork.ApplicationGatewaySslCertificatePropertiesFormat{
-				Data:     to.StringPtr(certB64),
-				Password: to.StringPtr("azure"),
-			},
-		}
-
-		sslCertificates = append(sslCertificates, agCert)
+		agCert, _ := d.convertCertificate(target.generateSecretName(wdPrefix), secret)
+		sslCertificates = append(sslCertificates, *agCert)
+		routingRules = append(routingRules, routingRule)
+		listeners = append(listeners, listener)
 	}
 
 	waf.HTTPListeners = &listeners
 	waf.SslCertificates = &sslCertificates
 	waf.RequestRoutingRules = &routingRules
 
+	for _, s := range *waf.SslCertificates {
+		fmt.Println(*s.Name)
+	}
+
 	zap.S().Debugf("Have %d certificatesToSync", len(*waf.SslCertificates))
 }
 
-func (d *Director) secret(target TerminationTarget) (*v1.Secret, error) {
+func (d *Director) convertSecretCertToPfx(secret *v1.Secret) ([]byte, error) {
+	wrapper, err := crypto.ParseSecretToCertContainer(secret)
+	if err != nil {
+		zap.S().Error(err)
+		return nil, err
+	}
+
+	return sslMate.Encode(rand.Reader, wrapper.PrivateKey, wrapper.Certificates[0], wrapper.CACertificates, "azure")
+}
+
+func (d *Director) convertCertificate(secretName string, secret *v1.Secret) (*azureNetwork.ApplicationGatewaySslCertificate, error) {
+	zap.S().Debugf("Converting certificate %s", secretName)
+	certPfx, err := d.convertSecretCertToPfx(secret)
+	if err != nil {
+		return nil, err
+	}
+
+	certB64 := base64.StdEncoding.EncodeToString(certPfx)
+	agCert := azureNetwork.ApplicationGatewaySslCertificate{
+		Etag: to.StringPtr(""),
+		Name: to.StringPtr(secretName),
+		ApplicationGatewaySslCertificatePropertiesFormat: &azureNetwork.ApplicationGatewaySslCertificatePropertiesFormat{
+			Data:     to.StringPtr(certB64),
+			Password: to.StringPtr("azure"),
+		},
+	}
+
+	return &agCert, nil
+}
+
+func (d *Director) getSecretForTarget(target TerminationTarget) (*v1.Secret, error) {
 	secret, err := d.ClientSet.CoreV1().Secrets(target.Namespace).Get(target.Secret, metav1.GetOptions{})
 	return secret, err
 }
@@ -194,6 +199,7 @@ func (d *Director) targetRoutingRules(waf *azureNetwork.ApplicationGateway, list
 			BackendHTTPSettings: resourceRef(fmt.Sprintf("%s/backendHttpSettingsCollection/%s", *waf.ID, d.AzureWafConfig.BackendHttpSettings)),
 		},
 	}
+
 	return routingRule
 }
 
@@ -210,43 +216,48 @@ func (d *Director) targetListener(target TerminationTarget, wdPrefix string, waf
 		Protocol:                azureNetwork.HTTPS,
 		SslCertificate:          resourceRef(fmt.Sprintf("%s/sslCertificates/%s", *waf.ID, target.generateSecretName(wdPrefix))),
 	}
+
 	return listener, listenerName
 }
 
 func (d *Director) rulesToSync(waf *azureNetwork.ApplicationGateway) []azureNetwork.ApplicationGatewayRequestRoutingRule {
 	routingRules := []azureNetwork.ApplicationGatewayRequestRoutingRule{}
+
 	for _, rr := range *waf.RequestRoutingRules {
-		if d.hasPrefix(*rr.Name) {
+		if !d.hasPrefix(*rr.Name) {
 			routingRules = append(routingRules, rr)
 		} else {
 			zap.S().Debugf("Skipping %s", *rr.Name)
 		}
 	}
+
 	return routingRules
 }
 
 func (d *Director) listenersToSync(waf *azureNetwork.ApplicationGateway, listenersByName map[string]azureNetwork.ApplicationGatewayHTTPListener) []azureNetwork.ApplicationGatewayHTTPListener {
 	listeners := []azureNetwork.ApplicationGatewayHTTPListener{}
 	for _, l := range *waf.HTTPListeners {
-		if d.hasPrefix(*l.Name) {
+		if !d.hasPrefix(*l.Name) {
 			listeners = append(listeners, l)
 			listenersByName[*l.Name] = l
 		} else {
 			zap.S().Debugf("Skipping %s", *l.Name)
 		}
 	}
+
 	return listeners
 }
 
 func (d *Director) certificatesToSync(waf *azureNetwork.ApplicationGateway) []azureNetwork.ApplicationGatewaySslCertificate {
 	sslCertificates := []azureNetwork.ApplicationGatewaySslCertificate{}
 	for _, sslCert := range *waf.SslCertificates {
-		if d.hasPrefix(*sslCert.Name) {
+		if !d.hasPrefix(*sslCert.Name) {
 			sslCertificates = append(sslCertificates, sslCert)
 		} else {
 			zap.S().Debugf("Skipping %s", *sslCert.Name)
 		}
 	}
+
 	return sslCertificates
 }
 
@@ -265,6 +276,7 @@ func (d *Director) syncWAFLoop(stop <-chan struct{}) {
 
 	for {
 		waf, err := d.AzureAGClient.Get(context.Background(), agRgName, agName)
+
 		if err != nil {
 			zap.S().Error(err)
 			zap.S().Infof("Error getting WAF %s %s", agRgName, agName)
