@@ -12,24 +12,24 @@ func init() {
 
 }
 
-func TestDirector_HasNotPrefix_should_succeed(t *testing.T) {
+func TestDirector_HasPrefix_should_fail(t *testing.T) {
 	cfg := config.AzureWafConfig{
 		ListenerPrefix: "prix",
 	}
 	d := &Director{}
 	d.AzureWafConfig = &cfg
 	input := "blabla"
-	result := d.hasNotPrefix(input)
-	assert.Equal(t, true, result, "string has correct prefix")
+	result := d.hasPrefix(input)
+	assert.Equal(t, false, result, "string has incorrect correct prefix")
 }
 
-func TestDirector_HasNotPrefix_should_fail(t *testing.T) {
+func TestDirector_HasPrefix_should_succeed(t *testing.T) {
 	cfg := config.AzureWafConfig{
 		ListenerPrefix: "prix",
 	}
 	d := &Director{}
 	d.AzureWafConfig = &cfg
-	input := "prixblabla"
-	result := d.hasNotPrefix(input)
-	assert.Equal(t, false, result, "string has not correct prefix")
+	input := "prix-blalala"
+	result := d.hasPrefix(input)
+	assert.Equal(t, true, result, "string has correct prefix")
 }

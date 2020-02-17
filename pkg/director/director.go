@@ -216,7 +216,7 @@ func (d *Director) targetListener(target TerminationTarget, wdPrefix string, waf
 func (d *Director) rulesToSync(waf *azureNetwork.ApplicationGateway) []azureNetwork.ApplicationGatewayRequestRoutingRule {
 	routingRules := []azureNetwork.ApplicationGatewayRequestRoutingRule{}
 	for _, rr := range *waf.RequestRoutingRules {
-		if d.hasNotPrefix(*rr.Name) {
+		if d.hasPrefix(*rr.Name) {
 			routingRules = append(routingRules, rr)
 		} else {
 			zap.S().Debugf("Skipping %s", *rr.Name)
@@ -228,7 +228,7 @@ func (d *Director) rulesToSync(waf *azureNetwork.ApplicationGateway) []azureNetw
 func (d *Director) listenersToSync(waf *azureNetwork.ApplicationGateway, listenersByName map[string]azureNetwork.ApplicationGatewayHTTPListener) []azureNetwork.ApplicationGatewayHTTPListener {
 	listeners := []azureNetwork.ApplicationGatewayHTTPListener{}
 	for _, l := range *waf.HTTPListeners {
-		if d.hasNotPrefix(*l.Name) {
+		if d.hasPrefix(*l.Name) {
 			listeners = append(listeners, l)
 			listenersByName[*l.Name] = l
 		} else {
@@ -241,7 +241,7 @@ func (d *Director) listenersToSync(waf *azureNetwork.ApplicationGateway, listene
 func (d *Director) certificatesToSync(waf *azureNetwork.ApplicationGateway) []azureNetwork.ApplicationGatewaySslCertificate {
 	sslCertificates := []azureNetwork.ApplicationGatewaySslCertificate{}
 	for _, sslCert := range *waf.SslCertificates {
-		if d.hasNotPrefix(*sslCert.Name) {
+		if d.hasPrefix(*sslCert.Name) {
 			sslCertificates = append(sslCertificates, sslCert)
 		} else {
 			zap.S().Debugf("Skipping %s", *sslCert.Name)
@@ -250,9 +250,9 @@ func (d *Director) certificatesToSync(waf *azureNetwork.ApplicationGateway) []az
 	return sslCertificates
 }
 
-func (d *Director) hasNotPrefix(name string) bool {
+func (d *Director) hasPrefix(name string) bool {
 	wdPrefix := d.AzureWafConfig.ListenerPrefix
-	return !strings.HasPrefix(name, wdPrefix)
+	return strings.HasPrefix(name, wdPrefix)
 }
 
 func (d *Director) syncWAFLoop(stop <-chan struct{}) {
@@ -295,8 +295,8 @@ func (d *Director) syncWAFLoop(stop <-chan struct{}) {
 }
 
 // NewDirector - Creates a new instance of the director
-func NewDirector(k8sClient *kubernetes.Clientset, istioClient *istio.Clientset, agClient *azureNetwork.ApplicationGatewaysClient, gwInformer v1alpha3.GatewayInformer) *Director {
-
+func NewDirector(
+	k8sClient *kubernetes.Clientset, istioClient *istio.Clientset, agClient *azureNetwork.ApplicationGatewaysClient, gwInformer v1alpha3.GatewayInformer) *Director {
 	azureConfig := config.NewAzureConfig()
 	director := &Director{
 		AzureWafConfig:        azureConfig,
