@@ -1,21 +1,20 @@
 package director
 
-import "fmt"
+import (
+	"fmt"
+)
 
 type TerminationTarget struct {
-	Host      string
+	Hosts     []string
 	Port      int
 	Secret    string
 	Namespace string
 	Target    string
 }
 
-func (t *TerminationTarget) generateName() string {
-	return fmt.Sprintf("%s-tls", t.Host)
-}
-
-func (t TerminationTarget) generateNameWithPrefix(prefix string) string {
-	return fmt.Sprintf("%s-%s", prefix, t.generateName())
+func (t TerminationTarget) generateNameWithPrefix(prefix string, hostname string) string {
+	name := fmt.Sprintf("%s-%s", prefix, hostname)
+	return name
 }
 
 func (t TerminationTarget) generateSecretName(prefix string) string {
