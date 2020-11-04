@@ -167,6 +167,7 @@ func (d *Director) syncTargetsToWAF(waf *azureNetwork.ApplicationGateway) {
 
 		agCert, _ := d.convertCertificateToAGCertificate(target.generateSecretName(wdPrefix), secret)
 		agCertificates = append(agCertificates, *agCert)
+		// add cert to keyvault or update.
 		agListeners = append(agListeners, listeners...)
 		agRoutingRules = append(agRoutingRules, rules...)
 	}
@@ -218,7 +219,11 @@ func (d *Director) convertCertificateToAGCertificate(secretName string, secret *
 	Fetch the given secret
 */
 func (d *Director) getSecretForTarget(target TerminationTarget) (*v1.Secret, error) {
-	secret, err := d.ClientSet.CoreV1().Secrets(target.Namespace).Get(target.Secret, metav1.GetOptions{})
+	namespace := target.Namespace
+	if d.AzureWafConfig.UseIstioTls {
+		namespace = d.AzureWafConfig.IstioTlsNamespace
+	}
+	secret, err := d.ClientSet.CoreV1().Secrets(namespace).Get(target.Secret, metav1.GetOptions{})
 	return secret, err
 }
 

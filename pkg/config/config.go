@@ -15,6 +15,8 @@ const (
 	azureSubscriptionId         = "azure_subscription_id"
 	Ks8MasterUrl                = "ks8MasterUrl"
 	KubeConfig                  = "KubeConfig"
+	UseIstioTls                 = "use_istio_tls"
+	IstioTlsNamespace           = "istio_tls_namespace"
 )
 
 type AzureWafConfig struct {
@@ -25,6 +27,8 @@ type AzureWafConfig struct {
 	Name                string
 	ResourceGroup       string
 	SubscriptionID      string
+	UseIstioTls         bool
+	IstioTlsNamespace   string
 }
 
 type Ks8Config struct {
@@ -40,6 +44,8 @@ func NewAzureConfig() *AzureWafConfig {
 		BackendPool:         viper.GetString(AzureWafBackendPool),
 		Name:                viper.GetString(AzureWafName),
 		ResourceGroup:       viper.GetString(AzureWafRg),
+		UseIstioTls:         viper.GetBool(UseIstioTls),
+		IstioTlsNamespace:   viper.GetString(IstioTlsNamespace),
 		SubscriptionID:      "",
 	}
 	return &a
@@ -55,4 +61,6 @@ func Pflag() {
 	pflag.String(azureWafFrontendPort, "https", "The AG / WAF frontend port name")
 	pflag.String(azureWafBackendHttpSettings, "", "The AG / WAF backend http settings name")
 	pflag.String(AzureWafListenerPrefix, "wd", "Prefix all WAF Director listeners with this")
+	pflag.Bool(UseIstioTls, false, "get tls secret from istio namespace and not target namespace")
+	pflag.String(IstioTlsNamespace, "istio-system", "Namespace where istio and tls certificates are deployed")
 }
